@@ -1,0 +1,154 @@
+---
+title: "Deterministic model"
+author: "David Nguyen"
+date: "July 15, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+# library(GGally)
+library(viridis)
+low_r0 <- readRDS("data/deterministic_heat_low_r0.RDS")
+high_r0 <- readRDS("data/deterministic_heat_high_r0.RDS")
+
+low_r0 <- low_r0 %>%
+  mutate(uninfected = S + S_v + S_e)
+high_r0 <- high_r0 %>%
+  mutate(uninfected = S + S_v + S_e)
+
+# # TODO
+# * look over larger range of delays - maybe even up to a few weeks?
+# * need to modify proportion of asymptomatic cases given vaccination (probability of clinical symptoms is 0.328 (0.273-0.383))? But I don't understand how Lewnard & Grad calculated  it from  doi: 10.1016/j.vaccine.2011.09.072.
+# * Ohterwise, I think I'm ready to move on to the stochastic model
+#     + in this model, it will be easier to include removals of students with vaccinations that are symptomatic.
+#     + can also more easily manipulate control. Could be interesting if there are instances where there are still asymptomatic infections once the excluded students are allowed back.
+```
+
+# controls
+
+* *Compliance* - the proportion of unvaccinated students that comply with the exclusion order. Compliance < 1 can either reflect imperfect implementation/record keeping or it can represent a case where exclusion is non-mandatory, such that some students choose to continue going to school.
+    + Span of parameter: seq(0, 1, by = 0.1)
+
+* *Excluded contact rate (c)* - this parameter describes how exclusion changes contact rates. It is a proportion, $c = \frac{\beta_{excluded}}{\beta_{in school}}$. When $c = 0$ represents perfect exclusion, such that excluded students do not transmit mumps. When $c = 1$, this means that exclusion doesn't impact mumps transmission.
+    + Span of parameter: seq(0, 1, by = 0.1)
+    
+* *Delay* - number of days between initial detection of the outbreak and when exclusion occurs. Initial detection is the time when there is at least one symptomatic student.
+    + Span of parameter: seq(0, 28, by = 3.5)
+
+# initialization
+$S_{0,vaccinated} = 20, S_{0,unvaccinated} = 99, I_{0,unvaccinated} = 1$
+
+$R_{0,low} = 4$
+
+$R_{0,high} = 7$
+
+# results
+
+The number of students that remain uninfected ranged between [`r round(range(low_r0$uninfected))`] for $R_0 = 4$ and [`r round(range(high_r0$uninfected))`] for $R_0 = 7$. As expected, exclusion is most effective when compliance is high and the contact rate when excluded is low. As the delay between detection and exclusion increases, the number of averted cases collapses towards the no-intervention outcome.
+
+Importantly, these results indicate that neither 'perfect exclusion,' (i.e., c = 0) nor perfect compliance is necessary for exclusion to be effective. As long as a sufficient number of students comply with exclusion and the excluded contact rate is low enough relative to students remaining in school, there is an increase the numbers of uninfected individuals at the end of the outbreak.
+
+```{r}
+# For both simulations: N = 500, S_v = 20, S_unvax = 99, Init_inf = 1
+
+# heatmap for R0 = 4
+p1 <-
+  ggplot(low_r0, aes(x = `contact reduction`, y = efficacy)) +
+  geom_raster(aes(fill = uninfected )) +
+  # geom_contour(aes(z = uninfected )) +
+  labs(title = "Number of uninfected students (R0 = 4)",
+       y = "compliance", x = "c") +
+  scale_fill_viridis() + theme_bw() +
+  facet_wrap(~delay)
+
+# heatmap for R0 = 7 
+p2 <- 
+  ggplot(high_r0, aes(x = `contact reduction`, y = efficacy)) +
+  geom_raster(aes(fill = uninfected )) +
+  # geom_contour(aes(z = uninfected )) +
+  labs(title = "Number of uninfected students (R0 = 7)",
+       y = "compliance", x = "c") +
+  scale_fill_viridis() + theme_bw() +
+  facet_wrap(~delay)
+p1
+p2
+```
+
+These scatter plots are another way of visualizing the interaction between compliance and contact reduction. As mentioned previously, the relationship doesn't change much across the range of delays considered here.
+
+```{r}
+# as points
+ggplot(low_r0, aes(x = efficacy, y = uninfected, col = `contact reduction`)) + 
+  geom_point() +
+  scale_color_viridis() +
+  labs(title = "Number of uninfected students (R0 = 4)",
+       x = "compliance", col = "c") +
+  facet_wrap(~delay)
+
+ggplot(high_r0, aes(x = efficacy, y = uninfected, col = `contact reduction`)) + 
+  geom_point() +
+  scale_color_viridis() +
+  labs(title = "Number of uninfected students (R0 = 7)",
+       x = "compliance", col = "c") +
+  facet_wrap(~delay)
+
+# # as lines
+# ggplot(filter(low_r0, `contact reduction` %in% seq(0,1,0.1)), 
+#        aes(x = efficacy, y = uninfected, group = `contact reduction`, col = `contact reduction`)) + 
+#   geom_line() +
+#   scale_color_viridis() +
+#   labs(title = "Number of uninfected students (R0 = 4)") +
+#   facet_wrap(~delay)
+# 
+# ggplot(filter(high_r0, `contact reduction` %in% seq(0,1,0.1)), 
+#        aes(x = efficacy, y = uninfected, group = `contact reduction`, col = `contact reduction`)) + 
+#   geom_line() +
+#   scale_color_viridis() +
+#   labs(title = "Number of uninfected students (R0 = 7)") +
+#   facet_wrap(~delay)
+
+```
+
+```{r}
+high_r0 <- high_r0 %>%
+  mutate(tExclusion = t_detected + delay,
+         # +ve means before peak, -ve means after peak
+         fromPeakExp = tPeakExp - tExclusion,
+         fromPeakInf = tPeakInf - tExclusion)
+# not sure how to plot this
+
+```
+
+```{r eval=FALSE}
+# no interaction model
+lm_hi <- lm(uninfected ~ efficacy+delay+`contact reduction`, data = high_r0)
+summary(lm_hi) # effect sizes for each control param?
+plot(lm_hi) # idk how to interpret this
+
+lm_lo <- lm(uninfected ~ efficacy+delay+`contact reduction`, data = low_r0)
+summary(lm_lo) # effect sizes for each control param?
+plot(lm_lo) # idk how to interpret this
+
+# all interactions model
+lmx_hi <- lm(uninfected ~ efficacy*delay*`contact reduction`, data = high_r0)
+summary(lmx_hi) # effect sizes for each control param?
+plot(lmx_hi) # idk how to interpret this
+
+lmx_lo <- lm(uninfected ~ efficacy*delay*`contact reduction`, data = low_r0)
+summary(lmx_lo) # effect sizes for each control param?
+plot(lmx_lo) # idk how to interpret this
+```
+
+
+
+
+# next steps
+
+* use deterministic model to figure out a more relevant range of exclusion delays.
+* Do analyses using the stochastic model.
+* I may need to look at how varying the initial susceptible population composition (how many are unvax vs. vax failure?)
+    + in high vaccine uptake situations, exclusion doesn't make sense b/c most ppl get sick b/c vax failure or waning. Hence, an exclusion policy would not target who is actually getting sick.
+    + Before doing this, I would need to define some utility function, to describe when exclusion is no longer a "good" policy.
+    Maybe this is creeping away from my goal though. This is moving things towards a more decision analysis type of paper. Not sure I have the qualifications to write that. On the other hand, isn't the point to do policy-relevant research? For research to be relvant, does it have to be prescriptive?
