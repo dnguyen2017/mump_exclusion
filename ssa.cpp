@@ -8,16 +8,19 @@ NumericVector ssa(NumericVector old, NumericVector param) {
               
               // step 1. label all possible events - each rate[] is an event
               
-              NumericVector rate(18);                      // initialize rate vec
+              NumericVector rate(19);                      // initialize rate vec
               NumericVector store(4);                      // init vec to store random nums, time, and P_
-              NumericVector cumsum(18);                    //= {R::cumsum(rate)};
+              NumericVector cumsum(19);                    //= {R::cumsum(rate)};
               
               double asymp = param[2]*param[3];             // calc some rates 
               double symp  = (1-param[2])*param[3];
+              double transmission = param[0]*          // beta
+                (old[3] + old[4] + old[13] + old[14] + // A + Y + A_vax + Y_vax
+                param[7]*(old[8] + old[9]));           // scaled contacts with (A_exc + Y_exc)
               
               // step 2. determine rate each event occurs
               
-              rate[0]  = param[0]*old[1]*(old[3]+old[13]); //exposure
+              rate[0]  = transmission*old[1];              //exposure
               rate[1]  = asymp*old[2];                     //asymptomatic
               rate[2]  = symp*old[2];                      //symptomatic isolation  
               rate[3]  = param[1]*old[3];                  //asymp rec
@@ -30,11 +33,12 @@ NumericVector ssa(NumericVector old, NumericVector param) {
               rate[10] = param[1]*old[9];                  //symp recov
               rate[11] = param[5]*old[7];                  //e reentry
               rate[12] = param[5]*old[8];                  //a reentry
-              rate[13] = param[6]*param[0]*old[11]*(old[3]+old[13]);//v exposure
+              rate[13] = param[6]*transmission*old[11];    // exposure for S_vax which is scaled by vaccine failure rate, param[6]
               rate[14] = asymp*old[12];                    //v asymptomatic
               rate[15] = symp*old[12];                     //v symptomatic isolation
               rate[16] = param[1]*old[13];                 //v asymp rec
               rate[17] = param[1]*old[16];                 //v symp rec
+              rate[18] = param[7]*transmission*old[6];      // exposure for S_exc which is scaled by reduction in contacts, param[7]
               
               // step 3. the rate any event occurs is r_total = cumsum[n-1] 
               // note, n-1 is r_total because c++ index starts at 0
@@ -78,6 +82,7 @@ NumericVector ssa(NumericVector old, NumericVector param) {
               } else if(store[3] <= cumsum[15]){old[0] += store[2]; --old[12]; ++old[16]; // e_vax -> y_vax_exc
               } else if(store[3] <= cumsum[16]){old[0] += store[2]; --old[13]; ++old[15]; // a_vax -> r_vax
               } else if(store[3] <= cumsum[17]){old[0] += store[2]; --old[16]; ++old[15]; // y_vax_exc -> r_vax (assume ppl return to school after recovery)
+              } else if(store[3] <= cumsum[18]){old[0] += store[2]; --old[6]; ++old[7];   // S_exc -> E_exc (at a rate scaled by reduction in contacts casue by exclusion) 
               }  
               
               return old;
