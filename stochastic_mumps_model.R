@@ -1,4 +1,5 @@
 # compile the stochastic simulation algorithm (is called inside MumpSim function)
+library(Rcpp)
 sourceCpp(file = "ssa.cpp") 
 
 # for simulating an outbreak. Returns a list containing a matrix of all times and states.
@@ -30,14 +31,16 @@ MumpSim <- function(Init = c(0,   # 1. time
                               0),          # scales contacts of excluded students
                     twait = 1.0, eff = 0.9, iter = 1, Tfinal = 3*365){
   runs <- vector("list", iter ) # init list to contain each simulations
-  for (k in seq_along(iter)){
+  for (k in seq_along(runs)){
     old <- matrix(ncol=length(Init),nrow=1)
     
     old[1,] <- Init
     #print(Init)
     i <- 1; flag <- 0; Pop <- sum(Init); tex = Tfinal
     
-    set.seed(k)
+    # set seed so that I can compare different simulations
+    # set.seed(k)
+    #print(k)
     #in loop
     while ((old[i,1] < Tfinal) && 
            ((old[i,2]+old[i,6]+old[i,7]+old[i,11]+old[i,12]+old[i,16]) < Pop)) { #ensures RateTotal is never 0
@@ -79,7 +82,7 @@ MumpSim <- function(Init = c(0,   # 1. time
     } # while  
     
     row.names(old) <- NULL # remove row index numbers
-    runs[[k]] <- old # store each simulation in list named "runs"
+    runs[[k]] <- old #data.frame(old, k)# store each simulation in list named "runs"
   } # for k in Iter
   
   # collect each run into a single df
@@ -88,12 +91,27 @@ MumpSim <- function(Init = c(0,   # 1. time
   names(runs) <- c("time",
                  "s","e","a","y","r",
                  "s_e", "e_e", "a_e", "y_e", "r_e",
-                 "s_v", "e_v", "a_v", 
+                 "s_v", "e_v", "a_v",
                  "y_v", # should always be zero, since structural assumption in model that they are always immediately isolated
-                 "r_v", 
+                 "r_v",
                  "y_v_e", # vaccinated students that were immediatly isolated b/c they were symptomatic
                  "iteration")
   # add parameter values to meta-data of output
   # attr(runs, "parameters") <- param # not very useful
   return(runs)
 } # end function
+
+# calculate expected proportion of unprotected individuals as function of age since last MMR dose
+# these age specific probabilities can be used to estimate the expected proportion of vaccinated students in each age class
+# that are susceptible to mumps
+
+mumps_protection <- function(years_post_vax = seq(1, 20, by = 1), 
+                             waning_rate = (1/27.4), 
+                             init_protected = 0.964, 
+                             age_last_dose = 4) {
+  # parameters based on annual waning rate of protection after last dose using an exponential model (Lewnard and Grad, 2018)
+  # dose scheduling https://www.cdc.gov/vaccines/vpd/mmr/public/index.html accessed on 3/14/2020
+  
+  prob_waned <- pexp(years_post_vax, rate = waning_rate)
+  return(init_protected * (1 - prob_waned))
+}
