@@ -42,8 +42,8 @@ MumpSim <- function(Init = c(0,   # 1. time
     # set.seed(k)
     #print(k)
     #in loop
-    while ((old[i,1] < Tfinal) && 
-           ((old[i,2]+old[i,6]+old[i,7]+old[i,11]+old[i,12]+old[i,16]) < Pop)) { #ensures RateTotal is never 0
+    while ((old[i,1] < Tfinal) && sum(old[i,c(3,4,5,8,9,10,13,14,15,17)]) > 0) {
+         #  ((old[i,2]+old[i,6]+old[i,7]+old[i,11]+old[i,12]+old[i,16]) < Pop)) { #ensures RateTotal is never 0
       
       # check if outbreak is detected (symptomatic > 1)
       if ((old[i,10]+old[i,17]) == 1 & flag == 0){
@@ -95,6 +95,7 @@ MumpSim <- function(Init = c(0,   # 1. time
                  "y_v", # should always be zero, since structural assumption in model that they are always immediately isolated
                  "r_v",
                  "y_v_e", # vaccinated students that were immediatly isolated b/c they were symptomatic
+                 "v",     # vaccinated students that a fully immune (cannot get mumps)
                  "iteration")
   # add parameter values to meta-data of output
   # attr(runs, "parameters") <- param # not very useful
